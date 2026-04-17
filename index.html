@@ -6796,10 +6796,15 @@
             }
         }
 
+        // Welcome 动画初始化 - 带多重保险
         (function initWelcome() {
             const overlay = document.getElementById('welcomeOverlay');
             const letters = document.querySelectorAll('.welcome-letter');
-            if (!overlay || !letters.length) return;
+            if (!overlay || !letters.length) {
+                // 如果没有Welcome元素，直接解锁滚动
+                document.body.style.overflow = '';
+                return;
+            }
             
             // 禁止欢迎动画期间的滚动
             document.body.style.overflow = 'hidden';
@@ -6807,7 +6812,7 @@
             // 所有字母入场完成后 → 切换到呼吸动画
             const totalLetters = letters.length;
             const lastLetterDelay = parseFloat(getComputedStyle(letters[totalLetters - 1]).animationDelay) || 0.82;
-            const letterAnimDuration = 0.9; // letterReveal持续时间
+            const letterAnimDuration = 0.9;
             
             setTimeout(() => {
                 letters.forEach(letter => {
@@ -6815,25 +6820,50 @@
                 });
             }, (lastLetterDelay + letterAnimDuration) * 1000);
             
-            // 3.5秒后开始翻页淡出
-            const dismissOverlay = () => {
-                overlay.classList.add('page-flip');
-                document.body.style.overflow = '';
-                // 翻页动画结束后移除DOM并锁定标题
-                overlay.addEventListener('transitionend', () => {
+            // 锁定标题函数
+            function lockHeroTitle() {
+                const heroTitle = document.querySelector('.hero-title');
+                if (heroTitle) {
+                    heroTitle.classList.add('title-locked');
+                    heroTitle.style.animation = 'titleLock 0.5s ease-out forwards';
+                }
+            }
+            
+            // 强制关闭Welcome（保险机制）
+            function forceDismiss() {
+                if (overlay && overlay.parentNode) {
+                    overlay.style.display = 'none';
                     overlay.remove();
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                    // 延迟一帧后锁定标题，确保DOM更新
-                    requestAnimationFrame(() => {
-                        lockHeroTitle();
-                    });
-                }, { once: true });
+                }
+                document.body.style.overflow = '';
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                lockHeroTitle();
+            }
+            
+            // 优雅淡出
+            const dismissOverlay = () => {
+                try {
+                    overlay.classList.add('page-flip');
+                    document.body.style.overflow = '';
+                    // 翻页动画结束后移除DOM
+                    const onTransitionEnd = () => {
+                        forceDismiss();
+                    };
+                    overlay.addEventListener('transitionend', onTransitionEnd, { once: true });
+                    // 保险：500ms后强制关闭
+                    setTimeout(forceDismiss, 500);
+                } catch(e) {
+                    forceDismiss();
+                }
             };
             
             // 自动淡出
             const autoDismissTimer = setTimeout(dismissOverlay, 3500);
             
-            // 点击/触摸/任意键也可以提前关闭
+            // 超级保险：5秒后强制关闭
+            const failSafeTimer = setTimeout(forceDismiss, 5000);
+            
+            // 点击/触摸/任意键提前关闭
             const earlyDismiss = () => {
                 clearTimeout(autoDismissTimer);
                 dismissOverlay();
